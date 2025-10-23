@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Core EB · Calculadora Omnicanal + Erlang · v3</title>
+<style>
+  :root{--bg:#0b1220;--card:#121a2b;--muted:#94a3b8;--text:#e2e8f0;--accent:#38bdf8;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;--border:#1f2a44;}
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px;background:var(--bg);color:var(--text);font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  h1{font-size:22px;margin:0 0 8px}
+  h2{font-size:16px;margin:18px 0 8px;color:var(--muted)}
+  .wrap{max-width:1220px;margin:0 auto;display:grid;grid-template-columns: 1.1fr 1fr;gap:16px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+  input[type="number"], input[type="text"], select, textarea{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#0f172a;color:var(--text)}
+  textarea{min-height:72px;resize:vertical}
+  .muted{color:var(--muted);font-size:12px}
+  .hr{height:1px;background:var(--border);margin:14px 0}
+  .btn{appearance:none;border:none;border-radius:12px;padding:10px 14px;font-weight:600;background:var(--accent);color:#021926;cursor:pointer}
+  .btn:disabled{opacity:.6;cursor:not-allowed}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .kpi{background:#0f172a;border:1px solid var(--border);padding:12px;border-radius:12px}
+  .kpi h3{margin:0 0 6px;font-size:13px;color:var(--muted)}
+  .kpi .v{font-size:22px}
+  .tabs{display:flex;gap:8px;margin:6px 0 12px}
+  .tab{padding:6px 10px;border:1px solid var(--border);border-radius:999px;background:#0f172a;color:var(--muted);cursor:pointer}
+  .tab.active{background:var(--accent);color:#03121f;border-color:transparent;font-weight:700}
+  .small{font-size:11px;color:var(--muted)}
+  .two{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+  .note{font-size:12px;color:var(--muted);background:#0f172a;border:1px dashed var(--border);padding:10px;border-radius:10px}
+  .inline{display:flex;gap:8px;align-items:center}
+  .pill{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid var(--border);background:#0f172a;color:var(--muted);font-size:12px}
+
+  /* Proposal print view */
+  #proposal{display:none}
+  #proposal .sheet{background:#fff;color:#0f172a;max-width:920px;margin:0 auto;padding:36px;border-radius:12px}
+  #proposal h1{color:#0b1220;font-size:24px;margin:0 0 8px}
+  #proposal h2{color:#334155;font-size:16px;margin:18px 0 8px}
+  #proposal .kv{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  #proposal table{width:100%;border-collapse:collapse;margin-top:8px}
+  #proposal th, #proposal td{border:1px solid #e2e8f0;padding:8px;text-align:left;font-size:14px}
+  #proposal .muted2{color:#64748b;font-size:12px}
+  #proposal .brand{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  #proposal .logo{font-weight:800;letter-spacing:.4px}
+  #proposal .stamp{font-size:11px;color:#64748b}
+  #proposal .footer{margin-top:18px;font-size:12px;color:#64748b}
+
+  @media print {
+    body{background:#fff}
+    .wrap{display:none}
+    #proposal{display:block}
+    .noprint{display:none !important}
+  }
+</style>
+</head>
+<body>
+  <div class="wrap noprint">
+    <div class="card">
+      <h1>Core EB · Calculadora Omnicanal + Erlang · v3</h1>
+      <div class="muted">Cotiza por <b>gestión resuelta</b> por canal (llamada/chat/redes) con <b>Entrada (SLA/Erlang C)</b> y <b>Salida (CR)</b>. Incluye presets de complejidad y modo Propuesta (PDF).</div>
+      <div class="hr"></div>
+
+      <div class="tabs">
+        <div class="tab active" data-mode="entrada">Entrada</div>
+        <div class="tab" data-mode="salida">Salida</div>
+      </div>
+
+      <h2>1) Costos & políticas</h2>
+      <div class="row">
+        <div>
+          <label>Moneda (símbolo)</label>
+          <input id="currencySymbol" type="text" value="$">
+          <div class="small">Ej.: $, COP$, USD$, €</div>
+        </div>
+        <div>
+          <label>Valor por minuto del agente</label>
+          <input id="costPerMin" type="number" min="0" step="0.0001" value="1000">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Overhead operativo + tecnología + QA (%)</label>
+          <input id="overheadPct" type="number" min="0" max="300" step="0.1" value="25">
+        </div>
+        <div>
+          <label>Ocupación objetivo (%)</label>
+          <input id="occupancyPct" type="number" min="40" max="95" step="1" value="82">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Margen bruto deseado (%)</label>
+          <input id="marginPct" type="number" min="0" max="90" step="0.1" value="35">
+        </div>
+        <div>
+          <label>Shrinkage (%) <span class="small">(informativo)</span></label>
+          <input id="shrinkagePct" type="number" min="0" max="60" step="1" value="18">
+        </div>
+      </div>
+
+      <div class="hr"></div>
+      <h2>2) Presets de complejidad</h2>
+      <div class="row">
+        <div>
+          <label>Preset para Llamada</label>
+          <select id="presetCall">
+            <option value="custom">Personalizado</option>
+            <option value="simple">Simple · AHT≈4-6 min</option>
+            <option value="transac">Transaccional · AHT≈6-9 min</option>
+            <option value="soporte">Soporte · AHT≈9-15 min</option>
+          </select>
+        </div>
+        <div class="inline">
+          <div style="flex:1">
+            <label>AHT llamada (min activos)</label>
+            <input id="wuCall" type="number" min="0.1" step="0.1" value="6">
+          </div>
+          <button class="btn" id="applyCallPreset" style="margin-top:22px">Aplicar</button>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Preset para WhatsApp/Chat</label>
+          <select id="presetChat">
+            <option value="custom">Personalizado</option>
+            <option value="simple">Básica · 4–6 turnos · 20–30 s</option>
+            <option value="transac">Transaccional · 8–10 turnos · 30–40 s</option>
+            <option value="soporte">Soporte · 10–16 turnos · 40–60 s</option>
+          </select>
+        </div>
+        <div class="inline">
+          <div style="flex:1">
+            <label>Turnos (#) · Seg/turno · ACW(seg)</label>
+            <div class="row">
+              <input id="turns" type="number" min="1" step="1" value="8">
+              <input id="secPerTurn" type="number" min="5" step="1" value="35">
+            </div>
+          </div>
+          <div style="width:130px">
+            <label>ACW chat (seg)</label>
+            <input id="acwChat" type="number" min="0" step="5" value="60">
+          </div>
+          <div style="width:140px">
+            <label>WU chat (min) <span class="small">(auto)</span></label>
+            <input id="wuChat" type="number" min="0.1" step="0.1" value="6.7">
+          </div>
+          <button class="btn" id="applyChatPreset" style="margin-top:22px">Aplicar</button>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Preset para Redes</label>
+          <select id="presetSocial">
+            <option value="custom">Personalizado</option>
+            <option value="simple">Básica · WU≈3–5 min</option>
+            <option value="transac">Transaccional · WU≈5–8 min</option>
+            <option value="soporte">Soporte · WU≈8–12 min</option>
+          </select>
+        </div>
+        <div class="inline">
+          <div style="flex:1">
+            <label>WU redes (min activos)</label>
+            <input id="wuSocial" type="number" min="0.1" step="0.1" value="5">
+          </div>
+          <button class="btn" id="applySocialPreset" style="margin-top:22px">Aplicar</button>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+      <div class="tabs">
+        <div class="tab active" data-mode="entrada">Entrada</div>
+        <div class="tab" data-mode="salida">Salida</div>
+      </div>
+
+      <div id="entradaBlock">
+        <h2>3) Parámetros de Entrada (SLA/Erlang C)</h2>
+        <div class="row">
+          <div>
+            <label>Canal</label>
+            <select id="inChannel">
+              <option value="llamada">Llamada (sincrónico)</option>
+              <option value="chat">WhatsApp/Chat (asincrónico)</option>
+            </select>
+          </div>
+          <div>
+            <label>Ofrecidos por hora (tráfico esperado)</label>
+            <input id="inOfferedPerHour" type="number" min="1" step="1" value="120">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>AHT/WU por gestión (min activos)</label>
+            <input id="inAHT" type="number" min="0.1" step="0.1" value="6">
+            <div class="small">Para chat, usa la estimación por turnos o WU directo.</div>
+          </div>
+          <div>
+            <label>Nivel de servicio objetivo (%)</label>
+            <input id="inSLA_pct" type="number" min="50" max="99" step="0.1" value="80">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Umbral de SLA (segundos)</label>
+            <input id="inSLA_thr" type="number" min="5" step="1" value="60">
+          </div>
+          <div>
+            <label>Concurrencia objetivo (solo chat)</label>
+            <input id="inConcurrency" type="number" min="1" step="1" value="2">
+          </div>
+        </div>
+      </div>
+
+      <div id="salidaBlock" style="display:none">
+        <h2>3) Parámetros de Salida (Outbound)</h2>
+        <div class="row">
+          <div>
+            <label>Contactos efectivos esperados por hora</label>
+            <input id="outTargets" type="number" min="1" step="1" value="60">
+          </div>
+          <div>
+            <label>Tasa de conexión (%)</label>
+            <input id="outConnectRate" type="number" min="1" max="100" step="0.1" value="35">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>AHT/WU por contacto conectado (min)</label>
+            <input id="outAHT" type="number" min="0.1" step="0.1" value="5.5">
+          </div>
+          <div>
+            <label>Overhead intento fallido (seg)</label>
+            <input id="outFailOverhead" type="number" min="0" step="1" value="8">
+          </div>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+      <h2>4) Mezcla de canal (para precio único)</h2>
+      <div class="grid3">
+        <div>
+          <label>% Llamadas</label>
+          <input id="mixCall" type="number" min="0" max="100" step="1" value="30">
+        </div>
+        <div>
+          <label>% WhatsApp/Chat</label>
+          <input id="mixChat" type="number" min="0" max="100" step="1" value="50">
+        </div>
+        <div>
+          <label>% Redes</label>
+          <input id="mixSocial" type="number" min="0" max="100" step="1" value="20">
+        </div>
+      </div>
+      <div class="small">La suma debe ser 100%.</div>
+
+      <div class="hr"></div>
+      <div class="two">
+        <div class="note">La concurrencia guía FRT/productividad; el precio por gestión se basa en WU, Ocupación y Costo/min. Erlang C solo se usa para dimensionar llamadas con SLA.</div>
+        <div class="inline">
+          <button class="btn" id="calcBtn">Calcular</button>
+          <button class="btn" id="proposalBtn">Generar Propuesta</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Resultados</h2>
+      <div class="grid3">
+        <div class="kpi">
+          <h3>Costo hora cargado</h3>
+          <div class="v" id="k_costHour">$0</div>
+          <div class="muted">Incluye overhead</div>
+        </div>
+        <div class="kpi">
+          <h3>FTE requeridos</h3>
+          <div class="v" id="k_fte">0</div>
+          <div class="muted">Por hora pico</div>
+        </div>
+        <div class="kpi">
+          <h3>Precio por gestión</h3>
+          <div class="v" id="k_price">$0</div>
+          <div class="muted">Con margen</div>
+        </div>
+      </div>
+
+      <h2>Detalle</h2>
+      <div class="kpi">
+        <div id="detail" class="muted">—</div>
+      </div>
+
+      <div class="hr"></div>
+      <div class="inline">
+        <button class="btn" id="exportBtn">Exportar CSV</button>
+        <a id="downloadLink" class="link" download="coreEB_pricing_v3.csv" style="display:none;">Descargar CSV</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Proposal sheet (print/PDF) -->
+  <div id="proposal">
+    <div class="sheet">
+      <div class="brand">
+        <div class="logo">Core EB — Calculadora Omnicanal</div>
+        <div class="stamp">2025-09-08 23:56</div>
+      </div>
+      <h1>Propuesta de Precio por Gestión</h1>
+      <div class="kv">
+        <div>
+          <label>Cliente</label>
+          <input id="p_cliente" type="text" placeholder="Nombre del cliente">
+        </div>
+        <div>
+          <label>Campaña</label>
+          <input id="p_campania" type="text" placeholder="Nombre o descripción">
+        </div>
+      </div>
+      <div class="kv" style="margin-top:10px">
+        <div>
+          <label>Tipo</label>
+          <input id="p_tipo" type="text" placeholder="Entrada (SLA) / Salida (CR) / Mixta">
+        </div>
+        <div>
+          <label>Cobertura</label>
+          <input id="p_cobertura" type="text" placeholder="Días/horas de operación">
+        </div>
+      </div>
+      <div class="kv" style="margin-top:10px">
+        <div>
+          <label>SLA/FRT objetivo</label>
+          <input id="p_sla" type="text" placeholder="p.ej. 80% ≤ 60s / FRT 90s">
+        </div>
+        <div>
+          <label>Observaciones</label>
+          <input id="p_obs" type="text" placeholder="Notas relevantes">
+        </div>
+      </div>
+
+      <h2>Resumen de Cálculo</h2>
+      <table>
+        <thead><tr><th>Parámetro</th><th>Valor</th></tr></thead>
+        <tbody id="p_resumen"></tbody>
+      </table>
+
+      <h2>Precio por Gestión</h2>
+      <table>
+        <thead><tr><th>Concepto</th><th>Valor</th></tr></thead>
+        <tbody id="p_precios"></tbody>
+      </table>
+
+      <div class="footer">
+        * Cálculo basado en WU/min activos, ocupación objetivo y costo por minuto (cargado con overhead).<br>
+        * Para llamadas entrantes, el dimensionamiento cumple el SLA objetivo mediante Erlang C.<br>
+        * Ajuste a D+15/D+30 con datos reales (true-up). Bonos/Malus según SLA pactados.<br>
+        * Esta propuesta no incluye precios públicos de plataformas; trabajamos con plataformas omnicanal avanzadas.
+      </div>
+    </div>
+  </div>
+
+<script>
+  const $ = (id)=>document.getElementById(id);
+  const tabs = document.querySelectorAll('.tab');
+  const pesos = () => $('currencySymbol').value || '$';
+
+  tabs.forEach(t=>t.addEventListener('click', ()=>{
+    tabs.forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    const mode = t.dataset.mode;
+    $('entradaBlock').style.display = (mode==='entrada')?'block':'none';
+    $('salidaBlock').style.display = (mode==='salida')?'block':'none';
+  }));
+
+  function fmt(n, money=true){
+    if (!isFinite(n)) return '-';
+    const v = Math.round(n*100)/100;
+    return money ? (pesos()+v.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})) : v.toLocaleString('es-CO');
+  }
+
+  function inputsBase(){
+    const cpm = parseFloat($('costPerMin').value||'0');
+    const oh = parseFloat($('overheadPct').value||'0');
+    const occ = parseFloat($('occupancyPct').value||'0');
+    const m = parseFloat($('marginPct').value||'0');
+    const sh = parseFloat($('shrinkagePct').value||'0');
+    return {cpm, oh, occ, m, sh, costHour: cpm*60*(1+oh/100)};
+  }
+
+  // Presets
+  $('applyCallPreset').addEventListener('click', ()=>{
+    const p = $('presetCall').value;
+    if(p==='simple') $('wuCall').value=5.0;
+    else if(p==='transac') $('wuCall').value=7.5;
+    else if(p==='soporte') $('wuCall').value=11.5;
+  });
+  function recomputeWUChat(){
+    const t=parseFloat($('turns').value||'0'), s=parseFloat($('secPerTurn').value||'0'), a=parseFloat($('acwChat').value||'0');
+    $('wuChat').value = (Math.round(((t*s + a)/60)*10)/10).toString();
+  }
+  $('applyChatPreset').addEventListener('click', ()=>{
+    const p = $('presetChat').value;
+    if(p==='simple'){ $('turns').value=5; $('secPerTurn').value=25; $('acwChat').value=40; }
+    else if(p==='transac'){ $('turns').value=9; $('secPerTurn').value=35; $('acwChat').value=75; }
+    else if(p==='soporte'){ $('turns').value=13; $('secPerTurn').value=50; $('acwChat').value=150; }
+    recomputeWUChat();
+  });
+  $('applySocialPreset').addEventListener('click', ()=>{
+    const p = $('presetSocial').value;
+    if(p==='simple') $('wuSocial').value=4;
+    else if(p==='transac') $('wuSocial').value=6.5;
+    else if(p==='soporte') $('wuSocial').value=10;
+  });
+
+  ['turns','secPerTurn','acwChat'].forEach(id=>$(id).addEventListener('input', recomputeWUChat));
+
+  // Erlang C helpers (simple)
+  function fact(n){ if(n>170) return Infinity; let r=1; for(let i=2;i<=n;i++) r*=i; return r; }
+  function erlangC(a,m){ if(m<=a) return 1.0; let sum=0; for(let k=0;k<m;k++) sum+=Math.pow(a,k)/fact(k);
+    const top = Math.pow(a,m)/fact(m) * (m/(m-a)); return top / (sum + top); }
+  function slaFromM(aht_sec, thr_sec, a, m){ const ec=erlangC(a,m); const beta=(m-a)*(thr_sec/aht_sec); return 1 - ec*Math.exp(-beta); }
+  function asaSec(aht_sec, a, m){ if(m<=a) return Infinity; const ec=erlangC(a,m); return (ec*aht_sec)/(m-a); }
+
+  function calcEntrada(){
+    const base=inputsBase(); const ch=$('inChannel').value; const offered=parseFloat($('inOfferedPerHour').value||'0');
+    const ahtm=parseFloat($('inAHT').value||'0'); const sla_p=parseFloat($('inSLA_pct').value||'0')/100; const thr=parseFloat($('inSLA_thr').value||'0');
+    const occ=base.occ/100;
+    if(ch==='llamada'){
+      const lambda=offered/3600; const ahts=ahtm*60; const a=lambda*ahts; let m=Math.max(1,Math.ceil(a)); let sla=0,asa=0;
+      while(m<2000){ sla=slaFromM(ahts,thr,a,m); if(sla>=sla_p) break; m++; } asa=asaSec(ahts,a,m);
+      const prod=60*occ; const cphAgent=prod/ahtm; const total=base.costHour*m; const cpc= total/offered; const price=cpc/(1-base.m/100);
+      return {mode:'entrada-llamada',m,sla,asa,cphAgent,total,cpc,price,offered,a,ahts};
+    } else { // chat
+      const conc = parseFloat($('inConcurrency').value||'1'); const prod=60*(base.occ/100); const cphAgent=prod/ahtm;
+      const m = Math.max(1, Math.ceil(offered / cphAgent)); const total=base.costHour*m; const cpc= total/offered; const price=cpc/(1-base.m/100);
+      const secPerTurn = parseFloat($('secPerTurn').value||'35'); const frtGuide = Math.floor(secPerTurn*conc*0.8);
+      return {mode:'entrada-chat',m,cphAgent,total,cpc,price,offered,ahtm,conc,frtGuide};
+    }
+  }
+
+  function calcSalida(){
+    const base=inputsBase(); const targets=parseFloat($('outTargets').value||'0'); const cr=parseFloat($('outConnectRate').value||'0')/100;
+    const ahtm=parseFloat($('outAHT').value||'0'); const fail=parseFloat($('outFailOverhead').value||'0'); const occ=base.occ/100;
+    const expectedFails=(1/cr)-1; const wu_fail_min=(fail*expectedFails)/60; const wu_success=ahtm + wu_fail_min;
+    const prod=60*occ; const cphAgent=prod/wu_success; const m=Math.max(1,Math.ceil(targets/cphAgent));
+    const total=base.costHour*m; const cpc= total/targets; const price=cpc/(1-base.m/100);
+    return {mode:'salida',m,cphAgent,total,cpc,price,wu_success,wu_fail_min,targets,cr};
+  }
+
+  function runCalc(){
+    const base=inputsBase(); const mode=document.querySelector('.tab.active').dataset.mode; $('k_costHour').textContent=fmt(base.costHour);
+    let r=null, detail='';
+    if(mode==='entrada'){
+      r=calcEntrada();
+      $('k_fte').textContent = r.m.toString(); $('k_price').textContent = fmt(r.price);
+      if(r.mode==='entrada-llamada'){
+        detail=`Entrada · Llamada — Ofrecidos/h: ${r.offered} · AHT: ${(r.ahts/60).toFixed(1)} min<br>
+Erlangs: ${r.a.toFixed(2)} · FTE mínimo: ${r.m} · SLA≈ ${(r.sla*100).toFixed(1)}% · ASA≈ ${r.asa.toFixed(1)} s<br>
+Costo total/h: ${fmt(r.total)} · CPC: ${fmt(r.cpc)} · Precio: ${fmt(r.price)}`;
+      } else {
+        detail=`Entrada · Chat — Ofrecidos/h: ${r.offered} · WU: ${r.ahtm} min · Concurrencia: ${r.conc} · FRT≈ ${r.frtGuide}s<br>
+FTE: ${r.m} · Costo total/h: ${fmt(r.total)} · CPC: ${fmt(r.cpc)} · Precio: ${fmt(r.price)}`;
+      }
+    } else {
+      r=calcSalida(); $('k_fte').textContent=r.m.toString(); $('k_price').textContent=fmt(r.price);
+      detail=`Salida — Meta efectivos/h: ${r.targets} · CR: ${(r.cr*100).toFixed(1)}%<br>
+WU éxito: ${r.wu_success.toFixed(2)} min (incluye fallos: ${r.wu_fail_min.toFixed(2)}) · CPH/Agente: ${r.cphAgent.toFixed(2)}<br>
+FTE: ${r.m} · Costo total/h: ${fmt(r.total)} · CPC: ${fmt(r.cpc)} · Precio: ${fmt(r.price)}`;
+    }
+    $('detail').innerHTML = detail; return {base, r};
+  }
+  $('calcBtn').addEventListener('click', runCalc);
+  // initial
+  recomputeWUChat(); runCalc();
+
+  function exportCSV(){
+    const {base,r} = runCalc(); const lines=[]; const sep=','; function add(k,v){ lines.push(`${k}${sep}${v}`); }
+    add('Moneda', $('currencySymbol').value);
+    add('Valor por minuto', base.cpm); add('Overhead (%)', base.oh); add('Ocupación (%)', base.occ); add('Margen (%)', base.m); add('Shrinkage (%)', base.sh);
+    lines.push('');
+    add('Modo', r.mode);
+    if(r.mode==='entrada-llamada'){ add('Ofrecidos/h', r.offered); add('AHT (min)', (r.ahts/60)); add('Erlangs', r.a); add('FTE', r.m); }
+    if(r.mode==='entrada-chat'){ add('Ofrecidos/h', r.offered); add('WU chat (min)', r.ahtm); add('Concurrencia', r.conc); add('FTE', r.m); }
+    if(r.mode==='salida'){ add('Meta efectivos/h', r.targets); add('Tasa conexión (%)', (r.cr*100).toFixed(2)); add('WU éxito (min)', r.wu_success); add('FTE', r.m); }
+    lines.push(''); add('Costo hora cargado', base.costHour); add('CPC', r.cpc); add('Precio', r.price);
+    const csv=lines.join('\n'); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob);
+    const link=$('downloadLink'); link.href=url; link.style.display='inline-block'; link.click(); setTimeout(()=>URL.revokeObjectURL(url),30000);
+  }
+  $('exportBtn').addEventListener('click', exportCSV);
+
+  function toResumenRows(obj){
+    const tbody=$('p_resumen'); tbody.innerHTML='';
+    const kv=(k,v)=>`<tr><td>${k}</td><td>${v}</td></tr>`;
+    const base=inputsBase(); const cur=$('currencySymbol').value;
+    tbody.insertAdjacentHTML('beforeend', kv('Moneda', cur));
+    tbody.insertAdjacentHTML('beforeend', kv('Valor por minuto', fmt(base.cpm,false)));
+    tbody.insertAdjacentHTML('beforeend', kv('Overhead (%)', base.oh));
+    tbody.insertAdjacentHTML('beforeend', kv('Ocupación (%)', base.occ));
+    tbody.insertAdjacentHTML('beforeend', kv('Margen (%)', base.m));
+    if(obj.mode==='entrada-llamada'){
+      tbody.insertAdjacentHTML('beforeend', kv('Modo','Entrada · Llamada'));
+      tbody.insertAdjacentHTML('beforeend', kv('Ofrecidos/h', obj.offered));
+      tbody.insertAdjacentHTML('beforeend', kv('AHT (min)', (obj.ahts/60).toFixed(1)));
+      tbody.insertAdjacentHTML('beforeend', kv('SLA alcanzado (%)', (obj.sla*100).toFixed(1)));
+      tbody.insertAdjacentHTML('beforeend', kv('ASA (s)', obj.asa.toFixed(1)));
+      tbody.insertAdjacentHTML('beforeend', kv('FTE', obj.m));
+    } else if(obj.mode==='entrada-chat'){
+      tbody.insertAdjacentHTML('beforeend', kv('Modo','Entrada · Chat'));
+      tbody.insertAdjacentHTML('beforeend', kv('Ofrecidos/h', obj.offered));
+      tbody.insertAdjacentHTML('beforeend', kv('WU chat (min)', obj.ahtm));
+      tbody.insertAdjacentHTML('beforeend', kv('Concurrencia', obj.conc));
+      tbody.insertAdjacentHTML('beforeend', kv('FTE', obj.m));
+    } else if(obj.mode==='salida'){
+      tbody.insertAdjacentHTML('beforeend', kv('Modo','Salida'));
+      tbody.insertAdjacentHTML('beforeend', kv('Meta efectivos/h', obj.targets));
+      tbody.insertAdjacentHTML('beforeend', kv('Tasa conexión (%)', (obj.cr*100).toFixed(1)));
+      tbody.insertAdjacentHTML('beforeend', kv('WU éxito (min)', obj.wu_success.toFixed(2)));
+      tbody.insertAdjacentHTML('beforeend', kv('FTE', obj.m));
+    }
+  }
+
+  function toPreciosRows(obj){
+    const tbody=$('p_precios'); tbody.innerHTML='';
+    const kv=(k,v)=>`<tr><td>${k}</td><td>${v}</td></tr>`;
+    tbody.insertAdjacentHTML('beforeend', kv('Costo hora cargado', fmt(inputsBase().costHour)));
+    tbody.insertAdjacentHTML('beforeend', kv('Costo por contacto (CPC)', fmt(obj.cpc)));
+    tbody.insertAdjacentHTML('beforeend', kv('Precio por gestión', fmt(obj.price)));
+  }
+
+  function buildProposal(){
+    const {r}=runCalc(); toResumenRows(r); toPreciosRows(r); window.print();
+  }
+  $('proposalBtn').addEventListener('click', ()=>{
+    document.querySelector('#proposal').style.display='block';
+    buildProposal();
+    setTimeout(()=>{ document.querySelector('#proposal').style.display='none'; }, 1000);
+  });
+
+</script>
+</body>
+</html>

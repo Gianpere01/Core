@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Core EB · Calculadora Omnicanal + Erlang · v4</title>
+<style>
+  :root{--bg:#0b1220;--card:#121a2b;--muted:#94a3b8;--text:#e2e8f0;--accent:#38bdf8;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;--border:#1f2a44;}
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px;background:var(--bg);color:var(--text);font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  h1{font-size:22px;margin:0 0 8px}
+  h2{font-size:16px;margin:18px 0 8px;color:var(--muted)}
+  .wrap{max-width:1260px;margin:0 auto;display:grid;grid-template-columns: 1.1fr 1fr;gap:16px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+  input[type="number"], input[type="text"], select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#0f172a;color:var(--text)}
+  .muted{color:var(--muted);font-size:12px}
+  .hr{height:1px;background:var(--border);margin:14px 0}
+  .btn{appearance:none;border:none;border-radius:12px;padding:10px 14px;font-weight:600;background:var(--accent);color:#021926;cursor:pointer}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .kpi{background:#0f172a;border:1px solid var(--border);padding:12px;border-radius:12px}
+  .kpi h3{margin:0 0 6px;font-size:13px;color:var(--muted)}
+  .kpi .v{font-size:22px}
+  .small{font-size:11px;color:var(--muted)}
+  .pill{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid var(--border);background:#0f172a;color:var(--muted);font-size:12px}
+  .two{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+  @media (max-width: 1000px){ .wrap{grid-template-columns:1fr} }
+  a.link{color:var(--accent);text-decoration:none}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Core EB · Calculadora Omnicanal + Erlang · v4</h1>
+      <div class="muted">Incluye: v3 (Entrada/Salida + presets + Propuesta) y <b>nuevo módulo</b> de <b>Cotización por Estación de Trabajo</b> (precio mes/hora/min y opción “por gestión”).</div>
+      <div class="hr"></div>
+
+      <h2>Moneda global (símbolo)</h2>
+      <div class="row">
+        <div>
+          <label>Moneda</label>
+          <input id="g_currency" type="text" value="$">
+        </div>
+        <div>
+          <label>Horas calendario/mes (para conversiones)</label>
+          <input id="g_hoursPerMonth" type="number" min="1" step="1" value="176">
+        </div>
+      </div>
+
+      <div class="hr"></div>
+      <h2>Nuevo módulo: Estación de Trabajo</h2>
+      <div class="pill">No modifica los cálculos de los demás módulos</div>
+
+      <h3>1) Costo laboral directo</h3>
+      <div class="row">
+        <div>
+          <label>Salario básico mensual</label>
+          <input id="st_salary" type="number" min="0" step="0.01" value="1500000">
+        </div>
+        <div>
+          <label>Otros pagos fijos mensuales (opcional)</label>
+          <input id="st_otherFixed" type="number" min="0" step="0.01" value="0">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Seguridad social + parafiscales (% sobre salario)</label>
+          <input id="st_ss_paraf" type="number" min="0" step="0.01" value="24.0">
+          <div class="small">Define el % según tu régimen (salud, pensión, ARL, cajas, ICBF, SENA, etc.).</div>
+        </div>
+        <div>
+          <label>Cesantías (%)</label>
+          <input id="st_ces" type="number" min="0" step="0.01" value="8.33">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Intereses cesantías (%)</label>
+          <input id="st_int_ces" type="number" min="0" step="0.01" value="1.0">
+        </div>
+        <div>
+          <label>Prima de servicios (%)</label>
+          <input id="st_prima" type="number" min="0" step="0.01" value="8.33">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Vacaciones (%)</label>
+          <input id="st_vac" type="number" min="0" step="0.01" value="4.17">
+        </div>
+        <div>
+          <label>Otros laborales (%)</label>
+          <input id="st_otros_lab" type="number" min="0" step="0.01" value="0">
+        </div>
+      </div>
+
+      <h3>2) Infraestructura y otros del agente</h3>
+      <div class="row">
+        <div>
+          <label>Infraestructura física mensual (arriendo, servicios, mobiliario)</label>
+          <input id="st_infra_fis" type="number" min="0" step="0.01" value="200000">
+        </div>
+        <div>
+          <label>Infraestructura tecnológica mensual (PC, internet, software)</label>
+          <input id="st_infra_tec" type="number" min="0" step="0.01" value="250000">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Otros costos del agente (dotación, capacitaciones, etc.)</label>
+          <input id="st_agent_others" type="number" min="0" step="0.01" value="50000">
+        </div>
+        <div>
+          <label>Costos administrativos (% sobre subtotal agente) <span class="small">(o deja 0 y usa monto)</span></label>
+          <input id="st_admin_pct" type="number" min="0" step="0.01" value="12">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Costos administrativos (monto mensual alternativo)</label>
+          <input id="st_admin_amt" type="number" min="0" step="0.01" value="0">
+        </div>
+        <div>
+          <label>Margen comercial estación (%)</label>
+          <input id="st_margin" type="number" min="0" step="0.01" value="35">
+        </div>
+      </div>
+
+      <div class="hr"></div>
+      <h3>3) Modo de cobro</h3>
+      <div class="row">
+        <div>
+          <label>Modo</label>
+          <select id="st_mode">
+            <option value="tiempo">Por tiempo total (mes/hora/minuto)</option>
+            <option value="gestion">Por gestión</option>
+          </select>
+        </div>
+        <div>
+          <label>TMO / AHT (min) <span class="small">(solo si es por gestión)</span></label>
+          <input id="st_tmo" type="number" min="0.1" step="0.1" value="6">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Shrinkage (%)</label>
+          <input id="st_shrink" type="number" min="0" step="0.1" value="18">
+        </div>
+        <div>
+          <label>% Tiempo inactivo (ociosidad)</label>
+          <input id="st_idle" type="number" min="0" step="0.1" value="8">
+        </div>
+      </div>
+
+      <div class="two">
+        <div class="muted">Calcula precio mensual de estación y lo convierte a hora/minuto; si eliges <b>por gestión</b>, aplica shrinkage+inactividad para hallar capacidad y precio unitario.</div>
+        <button class="btn" id="st_calc">Calcular Estación</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Resultados – Estación de Trabajo</h2>
+      <div class="grid3">
+        <div class="kpi">
+          <h3>Costo operativo estación (mensual)</h3>
+          <div class="v" id="st_costOp">$0</div>
+          <div class="muted">Antes de margen</div>
+        </div>
+        <div class="kpi">
+          <h3>Precio estación (mensual)</h3>
+          <div class="v" id="st_priceMonth">$0</div>
+          <div class="muted">Con margen</div>
+        </div>
+        <div class="kpi">
+          <h3>Modo</h3>
+          <div class="v" id="st_mode_out">—</div>
+          <div class="muted">Tiempo o gestión</div>
+        </div>
+      </div>
+
+      <h3>Conversión a tiempo</h3>
+      <div class="grid3">
+        <div class="kpi">
+          <h3>Precio por hora</h3>
+          <div class="v" id="st_priceHour">$0</div>
+        </div>
+        <div class="kpi">
+          <h3>Precio por minuto</h3>
+          <div class="v" id="st_priceMin">$0</div>
+        </div>
+        <div class="kpi">
+          <h3>Gestiones/mes (si por gestión)</h3>
+          <div class="v" id="st_gpm">—</div>
+        </div>
+      </div>
+
+      <h3>Precio por gestión (si aplica)</h3>
+      <div class="kpi">
+        <div class="v" id="st_pricePerCase">—</div>
+        <div class="muted">Precio unitario por gestión resuelta</div>
+      </div>
+
+      <div class="hr"></div>
+      <button class="btn" id="st_export">Exportar CSV (Estación)</button>
+      <a id="st_dl" class="link" download="coreEB_estacion_v4.csv" style="display:none;">Descargar CSV</a>
+    </div>
+  </div>
+
+<script>
+  const $ = (id)=>document.getElementById(id);
+  const cur = ()=> $('g_currency').value || '$';
+
+  function fmt(n, money=true){
+    if(!isFinite(n)) return '-';
+    const v = Math.round(n*100)/100;
+    return money? (cur()+v.toLocaleString('es-CO',{minimumFractionDigits:2,maximumFractionDigits:2})) : v.toLocaleString('es-CO');
+  }
+
+  function calcStation(){
+    const salary = parseFloat($('st_salary').value||'0');
+    const otherFixed = parseFloat($('st_otherFixed').value||'0');
+
+    const ss_paraf = parseFloat($('st_ss_paraf').value||'0')/100;
+    const ces = parseFloat($('st_ces').value||'0')/100;
+    const int_ces = parseFloat($('st_int_ces').value||'0')/100;
+    const prima = parseFloat($('st_prima').value||'0')/100;
+    const vac = parseFloat($('st_vac').value||'0')/100;
+    const otros_lab = parseFloat($('st_otros_lab').value||'0')/100;
+
+    const base = salary;
+    const prov_total = base * (ss_paraf + ces + int_ces + prima + vac + otros_lab);
+    const subtotal_lab = base + prov_total + otherFixed;
+
+    const infra_fis = parseFloat($('st_infra_fis').value||'0');
+    const infra_tec = parseFloat($('st_infra_tec').value||'0');
+    const agent_others = parseFloat($('st_agent_others').value||'0');
+
+    const subtotal_agent = subtotal_lab + infra_fis + infra_tec + agent_others;
+
+    const admin_pct = parseFloat($('st_admin_pct').value||'0')/100;
+    const admin_amt = parseFloat($('st_admin_amt').value||'0');
+    const admin_cost = admin_amt>0 ? admin_amt : subtotal_agent * admin_pct;
+
+    const cost_operativo = subtotal_agent + admin_cost;
+
+    const margin = parseFloat($('st_margin').value||'0')/100;
+    const price_month = cost_operativo / (1 - margin);
+
+    const hoursMonth = parseFloat($('g_hoursPerMonth').value||'0');
+    const price_hour = price_month / Math.max(1,hoursMonth);
+    const price_min = price_hour / 60;
+
+    const mode = $('st_mode').value;
+    let gestionesMes = null, pricePerCase = null;
+
+    if(mode==='gestion'){
+      const tmo = parseFloat($('st_tmo').value||'0');
+      const shrink = parseFloat($('st_shrink').value||'0')/100;
+      const idle = parseFloat($('st_idle').value||'0')/100;
+      const minDisponibles = hoursMonth*60*(1 - shrink - idle);
+      const gestiones = minDisponibles / Math.max(0.01,tmo);
+      gestionesMes = Math.max(0, gestiones);
+      pricePerCase = price_month / Math.max(1, gestionesMes);
+    }
+
+    $('st_costOp').textContent = fmt(cost_operativo);
+    $('st_priceMonth').textContent = fmt(price_month);
+    $('st_mode_out').textContent = (mode==='gestion'?'Por gestión':'Por tiempo');
+
+    $('st_priceHour').textContent = fmt(price_hour);
+    $('st_priceMin').textContent = fmt(price_min);
+    $('st_gpm').textContent = gestionesMes!==null? (Math.round(gestionesMes*100)/100).toLocaleString('es-CO') : '—';
+    $('st_pricePerCase').textContent = pricePerCase!==null? fmt(pricePerCase) : '—';
+
+    return {
+      salary, otherFixed, ss_paraf, ces, int_ces, prima, vac, otros_lab,
+      infra_fis, infra_tec, agent_others, subtotal_lab, subtotal_agent,
+      admin_pct, admin_amt, admin_cost, cost_operativo, margin,
+      price_month, price_hour, price_min, hoursMonth,
+      mode, gestionesMes, pricePerCase
+    };
+  }
+
+  $('st_calc').addEventListener('click', calcStation);
+  calcStation();
+
+  function exportStationCSV(){
+    const r = calcStation();
+    const lines=[]; const sep=','; const add=(k,v)=>lines.push(`${k}${sep}${v}`);
+    add('Moneda', $('g_currency').value);
+    add('Horas por mes', r.hoursMonth);
+    lines.push('');
+    add('Salario básico', r.salary);
+    add('Otros fijos', r.otherFixed);
+    add('% SS + parafiscales', r.ss_paraf*100);
+    add('% Cesantías', r.ces*100);
+    add('% Intereses cesantías', r.int_ces*100);
+    add('% Prima', r.prima*100);
+    add('% Vacaciones', r.vac*100);
+    add('% Otros laborales', r.otros_lab*100);
+    add('Subtotal laboral', r.subtotal_lab);
+    lines.push('');
+    add('Infraestructura física', r.infra_fis);
+    add('Infraestructura tecnológica', r.infra_tec);
+    add('Otros del agente', r.agent_others);
+    add('Subtotal agente', r.subtotal_agent);
+    lines.push('');
+    add('% Admin', r.admin_pct*100);
+    add('Admin monto', r.admin_amt);
+    add('Costo admin usado', r.admin_cost);
+    add('Costo operativo estación', r.cost_operativo);
+    lines.push('');
+    add('Margen estación (%)', r.margin*100);
+    add('Precio mensual estación', r.price_month);
+    add('Precio por hora', r.price_hour);
+    add('Precio por minuto', r.price_min);
+    lines.push('');
+    add('Modo', r.mode);
+    if(r.mode==='gestion'){
+      add('TMO (min)', parseFloat($('st_tmo').value||'0'));
+      add('Shrinkage (%)', parseFloat($('st_shrink').value||'0'));
+      add('% Inactividad', parseFloat($('st_idle').value||'0'));
+      add('Gestiones/mes', r.gestionesMes);
+      add('Precio por gestión', r.pricePerCase);
+    }
+
+    const csv = lines.join('\n');
+    const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const link = $('st_dl');
+    link.href = url;
+    link.style.display = 'inline-block';
+    link.click();
+    setTimeout(()=>URL.revokeObjectURL(url), 30000);
+  }
+  $('st_export').addEventListener('click', exportStationCSV);
+</script>
+</body>
+</html>

@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Core EB · Calculadora Omnicanal + Erlang · v6.1</title>
+<style>
+  :root{--bg:#0b1220;--card:#121a2b;--muted:#94a3b8;--text:#e2e8f0;--accent:#38bdf8;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;--border:#1f2a44;}
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px;background:var(--bg);color:var(--text);font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  h1{font-size:22px;margin:0 0 8px}
+  h2{font-size:16px;margin:18px 0 8px;color:var(--muted)}
+  .wrap{max-width:1260px;margin:0 auto;display:grid;grid-template-columns: 1.1fr 1fr;gap:16px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+  input[type="number"], input[type="text"], select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#0f172a;color:#e2e8f0}
+  .muted{color:var(--muted);font-size:12px}
+  .hr{height:1px;background:var(--border);margin:14px 0}
+  .btn{appearance:none;border:none;border-radius:12px;padding:10px 14px;font-weight:600;background:var(--accent);color:#021926;cursor:pointer}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .kpi{background:#0f172a;border:1px solid var(--border);padding:12px;border-radius:12px}
+  .kpi h3{margin:0 0 6px;font-size:13px;color:var(--muted)}
+  .kpi .v{font-size:22px}
+  .small{font-size:11px;color:var(--muted)}
+  .two{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+  .inline{display:flex;gap:8px;align-items:end}
+  .alert{padding:10px;border-radius:10px;margin-top:6px;border:1px solid var(--border);background:#101b33;color:#e2e8f0;font-size:12px}
+  .alert.warn{border-color:#f59e0b;color:#fde68a;background:#2a1f08}
+  .alert.ok{border-color:#22c55e;color:#bbf7d0;background:#0a2a17}
+  a.link{color:var(--accent);text-decoration:none}
+  @media (max-width: 1000px){ .wrap{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Core EB · Calculadora Omnicanal + Erlang · v6.1</h1>
+      <div class="muted">Módulo <b>Estación de Trabajo</b> con auxilio, preset 2025 y validación automática. <b>Esta versión corrige el cálculo de hora/minuto y eventos.</b></div>
+      <div class="hr"></div>
+
+      <h2>Parámetros globales</h2>
+      <div class="row">
+        <div>
+          <label>Moneda</label>
+          <input id="g_currency" type="text" value="COP$ ">
+        </div>
+        <div>
+          <label>Horas calendario/mes</label>
+          <input id="g_hoursPerMonth" type="text" value="176">
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>SMMLV (referencia) — 2025</label>
+          <input id="g_smmlv" type="text" value="1423500">
+        </div>
+        <div>
+          <label>Umbral de auxilio (veces SMMLV)</label>
+          <input id="g_aux_threshold" type="text" value="2">
+        </div>
+      </div>
+
+      <div class="hr"></div>
+      <h2>Estación de Trabajo</h2>
+
+      <h3>1) Costo laboral directo</h3>
+      <div class="inline">
+        <div style="flex:1">
+          <label>Salario básico mensual</label>
+          <input id="st_salary" type="text" value="1423500">
+        </div>
+        <div style="flex:1">
+          <label>Auxilio de transporte (no base p/ prestaciones)</label>
+          <input id="st_aux_trans" type="text" value="200000">
+        </div>
+        <div style="width:220px">
+          <label>Aplica auxilio (auto)</label>
+          <select id="st_aux_aplica">
+            <option value="auto" selected>Automático (según SMMLV)</option>
+            <option value="si">Forzar: Sí</option>
+            <option value="no">Forzar: No</option>
+          </select>
+        </div>
+        <button class="btn" id="preset2025" type="button">Preset SMMLV 2025</button>
+      </div>
+      <div id="eligAlert" class="alert" style="display:none"></div>
+
+      <div class="row">
+        <div>
+          <label>Otros pagos fijos mensuales (bonos, turnos, etc.)</label>
+          <input id="st_otherFixed" type="text" value="0">
+        </div>
+        <div>
+          <label class="small">Nota legal</label>
+          <div class="muted small">El auxilio no integra la base de prestaciones ni seguridad social; se suma al costo mensual.</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>SS + parafiscales (% sobre salario)</label>
+          <input id="st_ss_paraf" type="text" value="24.0">
+        </div>
+        <div>
+          <label>Cesantías (%)</label>
+          <input id="st_ces" type="text" value="8.33">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Intereses cesantías (%)</label>
+          <input id="st_int_ces" type="text" value="1.0">
+        </div>
+        <div>
+          <label>Prima de servicios (%)</label>
+          <input id="st_prima" type="text" value="8.33">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Vacaciones (%)</label>
+          <input id="st_vac" type="text" value="4.17">
+        </div>
+        <div>
+          <label>Otros laborales (%)</label>
+          <input id="st_otros_lab" type="text" value="0">
+        </div>
+      </div>
+
+      <h3>2) Infraestructura y otros</h3>
+      <div class="row">
+        <div>
+          <label>Infraestructura física mensual</label>
+          <input id="st_infra_fis" type="text" value="200000">
+        </div>
+        <div>
+          <label>Infraestructura tecnológica mensual</label>
+          <input id="st_infra_tec" type="text" value="250000">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Otros del agente</label>
+          <input id="st_agent_others" type="text" value="50000">
+        </div>
+        <div>
+          <label>Administrativo (% sobre subtotal agente) o monto</label>
+          <input id="st_admin_pct" type="text" value="12">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Administrativo (monto mensual alternativo)</label>
+          <input id="st_admin_amt" type="text" value="0">
+        </div>
+        <div>
+          <label>Margen comercial estación (%)</label>
+          <input id="st_margin" type="text" value="35">
+        </div>
+      </div>
+
+      <div class="hr"></div>
+      <h3>3) Modo de cobro</h3>
+      <div class="row">
+        <div>
+          <label>Modo</label>
+          <select id="st_mode">
+            <option value="tiempo">Por tiempo total (mes/hora/minuto)</option>
+            <option value="gestion">Por gestión</option>
+          </select>
+        </div>
+        <div>
+          <label>TMO / AHT (min) <span class="small">(si es por gestión)</span></label>
+          <input id="st_tmo" type="text" value="6">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Shrinkage (%)</label>
+          <input id="st_shrink" type="text" value="18">
+        </div>
+        <div>
+          <label>% Inactividad (ociosidad)</label>
+          <input id="st_idle" type="text" value="8">
+        </div>
+      </div>
+
+      <div class="two">
+        <div class="muted">Se recalcula automáticamente al cambiar cualquier campo. Puedes usar coma o punto en decimales.</div>
+        <button class="btn" id="st_calc" type="button">Calcular Estación</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Resultados – Estación de Trabajo</h2>
+      <div class="grid3">
+        <div class="kpi">
+          <h3>Costo operativo estación (mensual)</h3>
+          <div class="v" id="st_costOp">COP$ 0</div>
+          <div class="muted">Antes de margen</div>
+        </div>
+        <div class="kpi">
+          <h3>Precio estación (mensual)</h3>
+          <div class="v" id="st_priceMonth">COP$ 0</div>
+          <div class="muted">Con margen</div>
+        </div>
+        <div class="kpi">
+          <h3>Modo</h3>
+          <div class="v" id="st_mode_out">—</div>
+        </div>
+      </div>
+
+      <h3>Conversión a tiempo</h3>
+      <div class="grid3">
+        <div class="kpi">
+          <h3>Precio por hora</h3>
+          <div class="v" id="st_priceHour">COP$ 0</div>
+        </div>
+        <div class="kpi">
+          <h3>Precio por minuto</h3>
+          <div class="v" id="st_priceMin">COP$ 0</div>
+        </div>
+        <div class="kpi">
+          <h3>Gestiones/mes (si por gestión)</h3>
+          <div class="v" id="st_gpm">—</div>
+        </div>
+      </div>
+
+      <h3>Precio por gestión (si aplica)</h3>
+      <div class="kpi">
+        <div class="v" id="st_pricePerCase">—</div>
+        <div class="muted">Precio unitario por gestión resuelta</div>
+      </div>
+
+      <div class="hr"></div>
+      <h3>Detalle de base</h3>
+      <div class="muted" id="st_baseDetail">—</div>
+
+      <div class="hr"></div>
+      <button class="btn" id="st_export" type="button">Exportar CSV (Estación)</button>
+      <a id="st_dl" class="link" download="coreEB_estacion_v6_1.csv" style="display:none;">Descargar CSV</a>
+    </div>
+  </div>
+
+<script>
+  const $ = (id)=>document.getElementById(id);
+  const cur = ()=> $('g_currency').value || 'COP$ ';
+
+  // Sanitizador: acepta coma o punto; devuelve fallback si NaN
+  function toNum(v, fallback=0){
+    if(typeof v !== 'string') v = String(v||'');
+    v = v.replace(/[^\d,.\-]/g,'').replace(',', '.');
+    const n = parseFloat(v);
+    return isFinite(n) ? n : fallback;
+  }
+
+  function fmt(n, money=true){
+    if(!isFinite(n)) return money? (cur()+'0.00') : '0';
+    const v = Math.round(n*100)/100;
+    return money? (cur()+v.toLocaleString('es-CO',{minimumFractionDigits:2,maximumFractionDigits:2})) : v.toLocaleString('es-CO');
+  }
+
+  // Elegibilidad de auxilio
+  function auxEligibility(){
+    const salary = toNum($('st_salary').value, 0);
+    const smmlv = toNum($('g_smmlv').value, 1423500);
+    const thr = toNum($('g_aux_threshold').value, 2);
+    const eligible = salary <= (thr*smmlv);
+    const mode = $('st_aux_aplica').value;
+    const alert = $('eligAlert');
+
+    let applies = eligible;
+    let msg = '';
+    let cls = '';
+
+    if(mode==='auto'){
+      applies = eligible;
+      if(eligible){
+        msg = `Elegible para auxilio: salario ${fmt(salary)} ≤ ${thr}×SMMLV (${fmt(thr*smmlv)}).`;
+        cls = 'alert ok';
+      }else{
+        msg = `No elegible: salario ${fmt(salary)} > ${thr}×SMMLV (${fmt(thr*smmlv)}). Auxilio se desactiva.`;
+        cls = 'alert warn';
+      }
+    }else if(mode==='si'){
+      applies = true;
+      msg = `Forzado en "Sí". Verifica cumplimiento legal (≤ ${thr}×SMMLV).`;
+      cls = 'alert warn';
+    }else{
+      applies = false;
+      msg = `Forzado en "No". Auxilio no aplicado.`;
+      cls = 'alert warn';
+    }
+
+    alert.textContent = msg;
+    alert.className = cls;
+    alert.style.display = 'block';
+    return applies;
+  }
+
+  // Preset SMMLV 2025
+  $('preset2025').addEventListener('click', ()=>{
+    $('st_salary').value = '1.423.500'.replace(/\./g,'');
+    $('st_aux_trans').value = '200000';
+    $('g_smmlv').value = '1423500';
+    $('st_aux_aplica').value = 'auto';
+    calcStation();
+  });
+
+  function calcStation(){
+    const aux_applies = auxEligibility();
+    const salary = toNum($('st_salary').value, 0);
+    const aux_trans = aux_applies ? toNum($('st_aux_trans').value, 0) : 0;
+    const otherFixed = toNum($('st_otherFixed').value, 0);
+
+    // % prestaciones sobre salario (NO incluye auxilio)
+    const ss_paraf = toNum($('st_ss_paraf').value, 0)/100;
+    const ces = toNum($('st_ces').value, 0)/100;
+    const int_ces = toNum($('st_int_ces').value, 0)/100;
+    const prima = toNum($('st_prima').value, 0)/100;
+    const vac = toNum($('st_vac').value, 0)/100;
+    const otros_lab = toNum($('st_otros_lab').value, 0)/100;
+
+    const prov_total = salary * (ss_paraf + ces + int_ces + prima + vac + otros_lab);
+
+    // Subtotal laboral
+    const subtotal_lab = salary + aux_trans + otherFixed + prov_total;
+
+    // Infra + otros
+    const infra_fis = toNum($('st_infra_fis').value, 0);
+    const infra_tec = toNum($('st_infra_tec').value, 0);
+    const agent_others = toNum($('st_agent_others').value, 0);
+
+    const subtotal_agent = subtotal_lab + infra_fis + infra_tec + agent_others;
+
+    // Administración
+    const admin_pct = toNum($('st_admin_pct').value, 0)/100;
+    const admin_amt = toNum($('st_admin_amt').value, 0);
+    const admin_cost = admin_amt>0 ? admin_amt : subtotal_agent * admin_pct;
+
+    const cost_operativo = subtotal_agent + admin_cost;
+
+    const margin = toNum($('st_margin').value, 0)/100;
+    const price_month = (1 - margin) > 0 ? cost_operativo / (1 - margin) : cost_operativo;
+
+    const hoursMonth = Math.max(1, toNum($('g_hoursPerMonth').value, 176));
+    const price_hour = price_month / hoursMonth;
+    const price_min = price_hour / 60;
+
+    const mode = $('st_mode').value;
+    let gestionesMes = null, pricePerCase = null;
+
+    if(mode==='gestion'){
+      const tmo = Math.max(0.01, toNum($('st_tmo').value, 6));
+      const shrink = Math.min(0.99, Math.max(0, toNum($('st_shrink').value, 18)/100));
+      const idle = Math.min(0.99, Math.max(0, toNum($('st_idle').value, 8)/100));
+      const minDisponibles = hoursMonth*60*(1 - shrink - idle);
+      gestionesMes = Math.max(0, minDisponibles / tmo);
+      pricePerCase = gestionesMes>0 ? (price_month / gestionesMes) : 0;
+    }
+
+    // Pintar
+    $('st_costOp').textContent = fmt(cost_operativo);
+    $('st_priceMonth').textContent = fmt(price_month);
+    $('st_mode_out').textContent = (mode==='gestion'?'Por gestión':'Por tiempo');
+    $('st_priceHour').textContent = fmt(price_hour);
+    $('st_priceMin').textContent = fmt(price_min);
+    $('st_gpm').textContent = gestionesMes!==null? (Math.round(gestionesMes*100)/100).toLocaleString('es-CO') : '—';
+    $('st_pricePerCase').textContent = pricePerCase!==null? fmt(pricePerCase) : '—';
+
+    // Detalle base
+    $('st_baseDetail').textContent =
+      `Horas/mes usadas: ${hoursMonth} · Margen: ${(margin*100).toFixed(2)}% · ` +
+      `Auxilio ${(aux_applies?'Sí':'No')} (${fmt(aux_trans)}) · ` +
+      `Subtotal laboral: ${fmt(subtotal_lab)} · Subtotal agente: ${fmt(subtotal_agent)} · Admin: ${fmt(admin_cost)}`;
+
+    return {price_month,price_hour,price_min,gestionesMes,pricePerCase};
+  }
+
+  // Recalcular al cambiar cualquier input/select
+  function wireAutoRecalc(){
+    document.querySelectorAll('input, select').forEach(el=>{
+      el.addEventListener('input', calcStation);
+      el.addEventListener('change', calcStation);
+    });
+  }
+
+  $('st_calc').addEventListener('click', calcStation);
+  wireAutoRecalc();
+  // init
+  calcStation();
+
+  function exportStationCSV(){
+    const lines=[]; const sep=','; const add=(k,v)=>lines.push(`${k}${sep}${v}`);
+    add('Moneda', $('g_currency').value);
+    add('Horas por mes', toNum($('g_hoursPerMonth').value,176));
+    add('SMMLV', toNum($('g_smmlv').value,1423500));
+    add('Umbral auxilio (x)', toNum($('g_aux_threshold').value,2));
+    lines.push('');
+    const rtxt = document.getElementById('st_baseDetail').textContent.replace(/,/g,';');
+    add('Detalle base', rtxt);
+    const costOp = document.getElementById('st_costOp').textContent;
+    const priceM = document.getElementById('st_priceMonth').textContent;
+    const priceH = document.getElementById('st_priceHour').textContent;
+    const priceMin = document.getElementById('st_priceMin').textContent;
+    const gpm = document.getElementById('st_gpm').textContent;
+    const ppc = document.getElementById('st_pricePerCase').textContent;
+    lines.push('');
+    add('Costo operativo estación', costOp);
+    add('Precio mensual estación', priceM);
+    add('Precio por hora', priceH);
+    add('Precio por minuto', priceMin);
+    add('Gestiones/mes', gpm);
+    add('Precio por gestión', ppc);
+
+    const csv = lines.join('\n');
+    const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const link = $('st_dl');
+    link.href = url;
+    link.style.display = 'inline-block';
+    link.click();
+    setTimeout(()=>URL.revokeObjectURL(url), 30000);
+  }
+  $('st_export').addEventListener('click', exportStationCSV);
+</script>
+</body>
+</html>
