@@ -250,10 +250,52 @@
 
   // Sanitizador: acepta coma o punto; devuelve fallback si NaN
   function toNum(v, fallback=0){
-    if(typeof v !== 'string') v = String(v||'');
-    v = v.replace(/[^\d,.\-]/g,'').replace(',', '.');
-    const n = parseFloat(v);
-    return isFinite(n) ? n : fallback;
+    if(v===null||v===undefined) return fallback;
+    let str = String(v).trim();
+    if(!str) return fallback;
+
+    const negative = /^-/.test(str);
+    str = str.replace(/^-/, '');
+
+    // Mantener solo dígitos y separadores comunes
+    str = str.replace(/[^\d.,]/g, '');
+    if(!str) return fallback;
+
+    const lastComma = str.lastIndexOf(',');
+    const lastDot = str.lastIndexOf('.');
+    let decimalSep = '';
+    if(lastComma !== -1 || lastDot !== -1){
+      if(lastComma === -1) decimalSep = '.';
+      else if(lastDot === -1) decimalSep = ',';
+      else decimalSep = lastComma > lastDot ? ',' : '.';
+    }
+
+    if(decimalSep){
+      const count = (str.match(new RegExp(`\\${decimalSep}`, 'g')) || []).length;
+      const decIdx = str.lastIndexOf(decimalSep);
+      const digitsAfter = str.length - decIdx - 1;
+      const onlyThisSep = decimalSep==='.' ? lastComma === -1 : lastDot === -1;
+      const treatAsThousands = count > 1 || digitsAfter === 0 || (onlyThisSep && digitsAfter === 3 && str.length > 4);
+      if(treatAsThousands){
+        decimalSep = '';
+      }else{
+        const thousandsSep = decimalSep === '.' ? ',' : '.';
+        const thousandsRe = new RegExp(`\\${thousandsSep}`, 'g');
+        const cleaned = str.replace(thousandsRe, '');
+        const newIdx = cleaned.lastIndexOf(decimalSep);
+        const intPart = cleaned.slice(0, newIdx).replace(new RegExp(`\\${decimalSep}`, 'g'), '');
+        const decPart = cleaned.slice(newIdx + 1);
+        str = `${intPart}.${decPart}`;
+      }
+    }
+
+    if(!decimalSep){
+      str = str.replace(/[.,]/g, '');
+    }
+
+    if(!str) return fallback;
+    const num = parseFloat((negative?'-':'') + str);
+    return isFinite(num) ? num : fallback;
   }
 
   function fmt(n, money=true){
