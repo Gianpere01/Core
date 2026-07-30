@@ -7,11 +7,19 @@ Plantilla imprimible de pasaporte (estilo Colombia) para trabajo escolar.
 - Todo en lineas negras/grises para colorear a mano.
 """
 import math
+import sys
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
-OUT = "/tmp/claude-0/-home-user-Core/46a8c2c9-9143-56df-8e00-82a83b14f864/scratchpad/Pasaporte_para_imprimir.pdf"
+# Con --sin-texto se genera la misma diagramacion pero sin ningun texto
+# dentro de las paginas del pasaporte (para rotular todo a mano).
+NO_TEXT = "--sin-texto" in sys.argv
+FORCE_TEXT = False  # se activa para instrucciones y etiquetas del margen
+
+BASE = "/tmp/claude-0/-home-user-Core/46a8c2c9-9143-56df-8e00-82a83b14f864/scratchpad/"
+OUT = BASE + ("Pasaporte_sin_texto_para_imprimir.pdf" if NO_TEXT
+              else "Pasaporte_para_imprimir.pdf")
 
 PW, PH = letter                 # 215.9 x 279.4 mm
 PAGE_W = 88 * mm                # ancho de una pagina de pasaporte
@@ -91,12 +99,16 @@ def dotted_line(x1, y, x2):
 
 
 def ctext(x, y, txt, size=8, font="Helvetica", gray=BLACK):
+    if NO_TEXT and not FORCE_TEXT:
+        return
     c.setFont(font, size)
     c.setFillGray(gray)
     c.drawCentredString(x, y, txt)
 
 
 def ltext(x, y, txt, size=8, font="Helvetica", gray=BLACK):
+    if NO_TEXT and not FORCE_TEXT:
+        return
     c.setFont(font, size)
     c.setFillGray(gray)
     c.drawString(x, y, txt)
@@ -181,6 +193,8 @@ def pg_cover_inside(x, y):
 def field(x, y, w, label_es, label_en, value=""):
     """Campo con etiqueta bilingue pequena y linea punteada para escribir."""
     ltext(x, y + 2.6 * mm, label_es + " / " + label_en, 4.3, "Helvetica", 0.35)
+    if NO_TEXT:
+        value = ""
     if value:
         ltext(x, y - 0.6 * mm, value, 6.5, "Helvetica-Bold")
         dotted_line(x + c.stringWidth(value, "Helvetica-Bold", 6.5) + 2 * mm,
@@ -248,12 +262,17 @@ def pg_data(x, y):
     c.setLineWidth(0.4)
     c.setStrokeGray(BLACK)
     c.line(x + 4 * mm, y + 4 * mm + mz_h, x + PAGE_W - 4 * mm, y + 4 * mm + mz_h)
-    c.setFont("Courier-Bold", 7.2)
-    c.setFillGray(0.35)
-    l1 = "P<COLAPELLIDO<<NOMBRE<<<<<<<<<<<<<<<<<<<<<<<<"
-    l2 = "AB1234567<8COL0000000M0000000<<<<<<<<<<<<<<02"
-    c.drawString(x + 5 * mm, y + 12.5 * mm, l1)
-    c.drawString(x + 5 * mm, y + 7.5 * mm, l2)
+    if NO_TEXT:
+        # guias para escribir a mano el codigo MRZ
+        dotted_line(x + 5 * mm, y + 12 * mm, x + PAGE_W - 5 * mm)
+        dotted_line(x + 5 * mm, y + 7 * mm, x + PAGE_W - 5 * mm)
+    else:
+        c.setFont("Courier-Bold", 7.2)
+        c.setFillGray(0.35)
+        l1 = "P<COLAPELLIDO<<NOMBRE<<<<<<<<<<<<<<<<<<<<<<<<"
+        l2 = "AB1234567<8COL0000000M0000000<<<<<<<<<<<<<<02"
+        c.drawString(x + 5 * mm, y + 12.5 * mm, l1)
+        c.drawString(x + 5 * mm, y + 7.5 * mm, l2)
 
 
 def pg_observaciones(x, y, num):
@@ -369,11 +388,14 @@ def pg_cover_back(x, y):
 # ----------------------------------------------------------------------
 def draw_spread(x, y, left_fn, right_fn, sheet_label):
     """Dibuja un pliego: pagina izquierda + derecha, marcas de corte y doblez."""
+    global FORCE_TEXT
     crop_marks(x, y, SPREAD_W, SPREAD_H)
     left_fn(x, y)
     right_fn(x + PAGE_W, y)
     fold_line(x + PAGE_W, y, SPREAD_H)
+    FORCE_TEXT = True  # la etiqueta queda en el margen y se recorta
     ltext(x, y + SPREAD_H + 2.2 * mm, sheet_label, 6, "Helvetica", 0.45)
+    FORCE_TEXT = False
 
 
 MARGIN_X = (PW - SPREAD_W) / 2
@@ -382,6 +404,7 @@ TOP_Y = PH - 14 * mm - SPREAD_H
 BOT_Y = TOP_Y - GAP - SPREAD_H
 
 # ---- pagina 1: instrucciones -----------------------------------------
+FORCE_TEXT = True
 cx = PW / 2
 ctext(cx, PH - 22 * mm, "PASAPORTE PARA IMPRIMIR, RECORTAR Y ARMAR", 14, "Helvetica-Bold")
 ctext(cx, PH - 28 * mm, "Plantilla escolar - estilo República de Colombia - tamaño real: 88 x 125 mm por página",
@@ -421,7 +444,12 @@ for title, items in ins:
 ltext(20 * mm, yy - 2 * mm,
       "Orden de armado: Hoja 1 (cubierta) - Hoja 2 - Hoja 3 - Hoja 4 - Hoja 5 - Hoja 6 - Hoja 7 - Hoja 8 (contracubierta).",
       8, "Helvetica-Oblique", 0.3)
+if NO_TEXT:
+    ltext(20 * mm, yy - 8 * mm,
+          "VERSIÓN SIN TEXTOS: todos los títulos, campos y códigos se escriben a mano sobre las líneas guía.",
+          8, "Helvetica-Bold", 0.15)
 c.showPage()
+FORCE_TEXT = False
 
 # ---- hojas con pliegos ------------------------------------------------
 # Cada pliego doblado es una "hoja" del cuadernillo:
@@ -454,9 +482,11 @@ for i in range(0, len(spreads), 2):
     if i + 1 < len(spreads):
         lbl2, l2f, r2f = spreads[i + 1]
         draw_spread(MARGIN_X, BOT_Y, l2f, r2f, lbl2)
+    FORCE_TEXT = True
     ctext(PW / 2, 8 * mm,
           "Imprimir al 100% (tamaño real) - papel carta - página de pasaporte: 88 x 125 mm",
           6.5, "Helvetica", 0.5)
+    FORCE_TEXT = False
     c.showPage()
 
 c.save()
